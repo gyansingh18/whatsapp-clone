@@ -1,0 +1,32 @@
+class UsersController < ApplicationController
+  before_action :redirect_if_logged_in, only: [:new, :create]
+  before_action :require_user, only: [:show]
+
+  def new
+    @user = User.new
+  end
+
+  def create
+    @user = User.new(user_params)
+
+    if @user.save
+      session[:user_id] = @user.id
+      cookies.encrypted[:user_id] = @user.id
+      @user.online!
+      flash[:success] = "Welcome to the chat app, #{@user.username}!"
+      redirect_to chats_path
+    else
+      render 'new'
+    end
+  end
+
+  def show
+    @user = User.find(params[:id])
+  end
+
+  private
+
+  def user_params
+    params.require(:user).permit(:username, :email, :password, :password_confirmation)
+  end
+end

@@ -1,0 +1,29 @@
+<div class="auth-container">
+  <div class="auth-card">
+    <div class="auth-header">
+      <div class="logo">
+        <i class="fab fa-whatsapp"></i>
+      </div>
+      <h1>Welcome Back</h1>
+      <p>Sign in to continue chatting</p>
+    </div>
+
+    <%= form_with url: login_path, local: true, class: "auth-form" do |form| %>
+      <div class="form-group">
+        <%= form.label :email, "Email Address" %>
+        <%= form.email_field :email, name: "session[email]", class: "form-control", placeholder: "Enter your email", required: true %>
+      </div>
+
+      <div class="form-group">
+        <%= form.label :password, "Password" %>
+        <%= form.password_field :password, name: "session[password]", class: "form-control", placeholder: "Enter your password", required: true %>
+      </div>
+
+      <%= form.submit "Sign In", class: "btn btn-primary" %>
+    <% end %>
+
+    <div class="auth-links">
+      Don't have an account? <%= link_to "Sign up", signup_path %>
+    </div>
+  </div>
+</div>

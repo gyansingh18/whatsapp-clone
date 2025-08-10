@@ -1,0 +1,246 @@
+<div class="chat-container">
+  <!-- Chat Sidebar -->
+  <div class="chat-sidebar">
+    <div class="sidebar-header">
+      <h2 class="sidebar-title">Chats</h2>
+      <%= link_to new_chat_path, class: "new-chat-btn", title: "New Chat" do %>
+        <i class="fas fa-plus"></i>
+      <% end %>
+    </div>
+
+    <!-- Online Users Section -->
+    <% if current_user.class.online.where.not(id: current_user.id).any? %>
+      <div class="online-users">
+        <div class="online-users-title">Online Users</div>
+        <div class="online-users-list">
+          <% current_user.class.online.where.not(id: current_user.id).each do |user| %>
+            <%= link_to chats_path(user_id: user.id), method: :post, class: "online-user" do %>
+              <div class="online-user-avatar">
+                <%= user.username.first.upcase %>
+              </div>
+              <div class="online-user-name"><%= user.username %></div>
+            <% end %>
+          <% end %>
+        </div>
+      </div>
+    <% end %>
+
+    <!-- Chat List -->
+    <div class="chat-list">
+      <% current_user.chats.includes(:users, :messages).left_joins(:messages).group('chats.id').order(Arel.sql('MAX(messages.created_at) DESC NULLS LAST')).each do |chat| %>
+        <%= link_to chat_path(chat), class: "chat-item #{'active' if chat == @chat}" do %>
+          <div class="chat-avatar">
+            <% if chat.chat_type == 'direct' %>
+              <% other_user = chat.users.where.not(id: current_user.id).first %>
+              <%= other_user&.username&.first&.upcase || '?' %>
+            <% else %>
+              <i class="fas fa-users"></i>
+            <% end %>
+          </div>
+          <div class="chat-info">
+            <div class="chat-name">
+              <% if chat.chat_type == 'direct' %>
+                <% other_user = chat.users.where.not(id: current_user.id).first %>
+                <%= other_user&.username || 'Unknown User' %>
+              <% else %>
+                <%= chat.name %>
+              <% end %>
+            </div>
+            <% if chat.last_message %>
+              <div class="chat-last-message">
+                <%= truncate(chat.last_message.content, length: 50) %>
+              </div>
+            <% else %>
+              <div class="chat-last-message" style="color: #999; font-style: italic;">No messages yet</div>
+            <% end %>
+          </div>
+          <% if chat.last_message %>
+            <div class="chat-meta">
+              <%= chat.last_message.created_at.strftime('%H:%M') %>
+            </div>
+          <% end %>
+        <% end %>
+      <% end %>
+    </div>
+  </div>
+
+  <!-- Chat Area -->
+  <div class="chat-area">
+    <!-- Chat Header -->
+    <div class="chat-header">
+      <div class="chat-header-avatar">
+        <% if @chat.chat_type == 'direct' %>
+          <% other_user = @other_users.first %>
+          <%= other_user&.username&.first&.upcase || '?' %>
+        <% else %>
+          <i class="fas fa-users"></i>
+        <% end %>
+      </div>
+      <div class="chat-header-info">
+        <h3>
+          <% if @chat.chat_type == 'direct' %>
+            <% other_user = @other_users.first %>
+            <%= other_user&.username || 'Unknown User' %>
+          <% else %>
+            <%= @chat.name %>
+          <% end %>
+        </h3>
+        <div class="chat-header-status">
+          <% if @chat.chat_type == 'direct' %>
+            <% other_user = @other_users.first %>
+            <% if other_user&.online? %>
+              <span style="color: #4caf50;"><i class="fas fa-circle" style="font-size: 0.7em;"></i> Online</span>
+            <% else %>
+              <span style="color: #999;">Offline</span>
+            <% end %>
+          <% else %>
+            <%= @chat.users.count %> members
+          <% end %>
+        </div>
+      </div>
+    </div>
+
+    <!-- Messages Container -->
+    <div class="messages-container" id="messagesContainer">
+      <% @messages.each do |message| %>
+        <div class="message <%= message.user == current_user ? 'sent' : 'received' %>" data-message-id="<%= message.id %>">
+          <% if @chat.chat_type == 'group' && message.user != current_user %>
+            <div class="message-sender"><%= message.user.username %></div>
+          <% end %>
+          <div class="message-content"><%= simple_format(message.content) %></div>
+          <div class="message-time"><%= message.created_at.strftime('%H:%M') %></div>
+        </div>
+      <% end %>
+    </div>
+
+    <!-- Message Input -->
+    <div class="message-input-container">
+      <%= form_with model: [@chat, @message], remote: true, id: "messageForm", data: { chat_id: @chat.id } do |form| %>
+        <%= form.text_area :content,
+            class: "message-input",
+            placeholder: "Type a message...",
+            rows: 1,
+            id: "messageInput",
+            required: true %>
+        <button type="submit" class="send-button" id="sendButton">
+          <i class="fas fa-paper-plane"></i>
+        </button>
+      <% end %>
+    </div>
+  </div>
+</div>
+
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    const messagesContainer = document.getElementById('messagesContainer');
+    const messageForm = document.getElementById('messageForm');
+    const messageInput = document.getElementById('messageInput');
+    const sendButton = document.getElementById('sendButton');
+    const chatId = <%= @chat.id %>;
+
+    // Scroll to bottom of messages
+    function scrollToBottom() {
+      messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    }
+
+    // Auto-resize textarea
+    messageInput.addEventListener('input', function() {
+      this.style.height = 'auto';
+      this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+    });
+
+    // Handle Enter key (send) and Shift+Enter (new line)
+    messageInput.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        if (this.value.trim()) {
+          messageForm.dispatchEvent(new Event('submit'));
+        }
+      }
+    });
+
+    // Handle form submission
+    messageForm.addEventListener('submit', function(e) {
+      e.preventDefault();
+
+      const content = messageInput.value.trim();
+      if (!content) return;
+
+      // Disable form while sending
+      sendButton.disabled = true;
+      messageInput.disabled = true;
+
+      // Send message via fetch
+      fetch(this.action, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]').content
+        },
+        body: JSON.stringify({
+          message: { content: content }
+        })
+      })
+      .then(response => {
+        if (response.ok) {
+          messageInput.value = '';
+          messageInput.style.height = 'auto';
+        } else {
+          throw new Error('Failed to send message');
+        }
+      })
+      .catch(error => {
+        console.error('Error:', error);
+        alert('Failed to send message. Please try again.');
+      })
+      .finally(() => {
+        sendButton.disabled = false;
+        messageInput.disabled = false;
+        messageInput.focus();
+      });
+    });
+
+    // Action Cable subscription for real-time messages
+    App.chatChannel = App.cable.subscriptions.create(
+      { channel: "ChatChannel", chat_id: chatId },
+      {
+        connected() {
+          console.log("Connected to chat " + chatId);
+        },
+
+        disconnected() {
+          console.log("Disconnected from chat " + chatId);
+        },
+
+        received(data) {
+          // Don't show our own messages (they're already displayed)
+          if (data.user.id === <%= current_user.id %>) {
+            return;
+          }
+
+          // Create message element
+          const messageDiv = document.createElement('div');
+          messageDiv.className = 'message received';
+          messageDiv.setAttribute('data-message-id', data.id);
+
+          let messageHTML = '';
+          <% if @chat.chat_type == 'group' %>
+            messageHTML += `<div class="message-sender">${data.user.username}</div>`;
+          <% end %>
+          messageHTML += `
+            <div class="message-content">${data.content.replace(/\n/g, '<br>')}</div>
+            <div class="message-time">${data.created_at}</div>
+          `;
+          messageDiv.innerHTML = messageHTML;
+
+          // Add to messages container
+          messagesContainer.appendChild(messageDiv);
+          scrollToBottom();
+        }
+      }
+    );
+
+    // Initial scroll to bottom
+    setTimeout(scrollToBottom, 100);
+  });
+</script>
