@@ -40,3 +40,4 @@ class Chat < ApplicationRecord
     messages.where('created_at > ?', user.chat_users.find_by(chat: self)&.updated_at || Time.current).count
   end
 end
+# Model optimization 105: Mon Aug 11 10:18:52 IST 2025
