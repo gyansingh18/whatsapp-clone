@@ -19,3 +19,4 @@ class User < ApplicationRecord
     update(online: false)
   end
 end
+# Model enhancement 4: Mon Aug 11 10:16:58 IST 2025
