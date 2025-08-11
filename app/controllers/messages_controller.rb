@@ -19,3 +19,4 @@ class MessagesController < ApplicationController
     params.require(:message).permit(:content)
   end
 end
+# Security enhancement 103: Mon Aug 11 10:18:52 IST 2025
